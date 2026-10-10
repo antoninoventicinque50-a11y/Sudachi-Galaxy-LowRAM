@@ -1,0 +1,70 @@
+name: Sudachi Galaxy LowRAM Android
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sudachi-galaxy-lowram-android.yml'
+      - '.gitmodules'
+      - 'src/core/hle/kernel/k_process.cpp'
+      - 'src/core/loader/nso.cpp'
+jobs:
+  build-android:
+    name: Build Sudachi LowRAM APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: read
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      GRADLE_OPTS: '-Xmx3g'
+    steps:
+      - name: Checkout Sudachi Galaxy LowRAM
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: false
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/hostedtoolcache/CodeQL /usr/local/share/powershell
+          df -h .
+      - name: Fetch exact submodule versions
+        run: |
+          git submodule sync --recursive
+          git -c protocol.version=2 submodule update --init --recursive --depth 1 --jobs 2
+          git submodule status
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - name: Install Android tools matching Sudachi
+        run: |
+          sdkmanager --install 'platforms;android-34' 'build-tools;34.0.0' 'ndk;26.2.11394342' 'cmake;3.22.1'
+          df -h .
+      - name: Cache experimental APK signing key
+        uses: actions/cache@v4
+        with:
+          path: src/android/sudachi/debug.keystore
+          key: sudachi-galaxy-lowram-test-signing-v1
+      - name: Prepare test signing key if missing
+        run: |
+          if [ ! -s src/android/sudachi/debug.keystore ]; then
+            keytool -genkeypair -v -keystore src/android/sudachi/debug.keystore -alias androiddebugkey -storepass android -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
+          fi
+      - name: Build arm64 APK
+        working-directory: src/android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew :sudachi:assembleMainlineRelWithDebInfo --no-daemon --max-workers=2 --stacktrace
+      - name: Upload Sudachi LowRAM APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sudachi-Galaxy-LowRAM-Android
+          path: src/android/sudachi/build/outputs/apk/mainline/relWithDebInfo/*.apk
+          if-no-files-found: error
+          retention-days: 7
