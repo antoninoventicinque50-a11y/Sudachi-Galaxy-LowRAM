@@ -33,6 +33,19 @@ jobs:
           git submodule sync --recursive
           git -c protocol.version=2 submodule update --init --recursive --depth 1 --jobs 2
           git submodule status
+      - name: Restore complete vcpkg history
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(git -C externals/vcpkg rev-parse --is-shallow-repository)" = "true" ]; then
+            git -C externals/vcpkg fetch --unshallow --no-tags origin
+          else
+            git -C externals/vcpkg fetch --no-tags origin
+          fi
+          git -C externals/vcpkg cat-file -e 'a42af01b72c28a8e1d7b48107b33e4f286a55ef6:versions/baseline.json'
+          git -C externals/vcpkg cat-file -e '7d7bef305b7affebc6f3ccacd12874ebd4fbfc50^{tree}'
+          git -C externals/vcpkg cat-file -e 'dfe9aa860f5a8317f341a21d317be1cf44e89f18^{tree}'
+          echo 'vcpkg history and required objects verified'
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
