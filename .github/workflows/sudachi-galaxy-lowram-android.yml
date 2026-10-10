@@ -69,6 +69,14 @@ jobs:
           if [ ! -s src/android/sudachi/debug.keystore ]; then
             keytool -genkeypair -v -keystore src/android/sudachi/debug.keystore -alias androiddebugkey -storepass android -keypass android -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
           fi
+      - name: Install glslangValidator host tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends glslang-tools
+          command -v glslangValidator
+          glslangValidator --version
       - name: Build arm64 APK
         working-directory: src/android
         run: |
