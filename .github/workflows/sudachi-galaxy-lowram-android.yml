@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/sudachi-galaxy-lowram-android.yml'
       - '.gitmodules'
+      - 'CMakeModules/DownloadExternals.cmake'
       - 'src/core/hle/kernel/k_process.cpp'
       - 'src/core/loader/nso.cpp'
 jobs:
