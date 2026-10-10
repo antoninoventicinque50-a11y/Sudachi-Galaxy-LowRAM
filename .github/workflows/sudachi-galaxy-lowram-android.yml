@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/sudachi-galaxy-lowram-android.yml'
       - '.gitmodules'
+      - 'tools/ci/sudachi_android_preflight.py'
       - 'CMakeModules/DownloadExternals.cmake'
       - 'src/core/hle/kernel/k_process.cpp'
       - 'src/core/loader/nso.cpp'
@@ -78,6 +79,11 @@ jobs:
           sudo apt-get install -y --no-install-recommends glslang-tools
           command -v glslangValidator
           glslangValidator --version
+      - name: Comprehensive Android native dependency preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/ci/sudachi_android_preflight.py
       - name: Build arm64 APK
         working-directory: src/android
         run: |
@@ -89,4 +95,17 @@ jobs:
           name: Sudachi-Galaxy-LowRAM-Android
           path: src/android/sudachi/build/outputs/apk/mainline/relWithDebInfo/*.apk
           if-no-files-found: error
+          retention-days: 7
+      - name: Preserve native build error logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sudachi-Galaxy-LowRAM-native-failure
+          path: |
+            src/android/sudachi/.cxx/**/CMakeFiles/CMakeError.log
+            src/android/sudachi/.cxx/**/CMakeFiles/CMakeOutput.log
+            src/android/sudachi/.cxx/**/vcpkg-manifest-install.log
+            src/android/sudachi/build/reports/**
+          include-hidden-files: true
+          if-no-files-found: ignore
           retention-days: 7
