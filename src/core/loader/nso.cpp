@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <cinttypes>
+#include <cstdint>
 #include <cstring>
 #include <vector>
+#ifdef __ANDROID__
+#include <sys/mman.h>
+#include <unistd.h>
+#endif
 
 #include "common/common_funcs.h"
 #include "common/hex_util.h"
@@ -141,7 +146,31 @@ std::optional<VAddr> AppLoader_NSO::LoadModule(Kernel::KProcess& process, Core::
     codeset.DataSegment().size += nso_header.segments[2].bss_size;
     u32 image_size{
         PageAlignSize(static_cast<u32>(program_image.size()) + nso_header.segments[2].bss_size)};
+    const std::size_t bss_begin = program_image.size();
     program_image.resize(image_size);
+#ifdef __ANDROID__
+    // Galaxy only: zero-filled BSS pages do not need to remain resident yet.
+    // MADV_DONTNEED is applied to complete pages inside the grown vector.
+    if (process.GetProgramId() == 0x010099C022B96000ULL &&
+        nso_header.segments[2].bss_size >= (128ULL << 20)) {
+        const long host_page_size = sysconf(_SC_PAGESIZE);
+        if (host_page_size > 0) {
+            const auto page_size = static_cast<std::uintptr_t>(host_page_size);
+            const auto first =
+                reinterpret_cast<std::uintptr_t>(program_image.data() + bss_begin);
+            const auto last =
+                reinterpret_cast<std::uintptr_t>(program_image.data() + image_size);
+            const auto first_page = ((first + page_size - 1) / page_size) * page_size;
+            const auto last_page = (last / page_size) * page_size;
+            if (last_page > first_page &&
+                madvise(reinterpret_cast<void*>(first_page), last_page - first_page,
+                        MADV_DONTNEED) == 0) {
+                LOG_INFO(Loader, "[GalaxyRAM] Discarded {} MiB of zero-initialized NSO BSS",
+                         (last_page - first_page) / (1ULL << 20));
+            }
+        }
+    }
+#endif
 
     for (std::size_t i = 0; i < nso_header.segments.size(); ++i) {
         codeset.segments[i].size = PageAlignSize(codeset.segments[i].size);
